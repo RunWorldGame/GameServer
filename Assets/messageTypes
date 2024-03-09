@@ -1,0 +1,4 @@
+﻿1 => new Player
+ - Vector3 Position
+ - ObjectType
+ - Player Name
