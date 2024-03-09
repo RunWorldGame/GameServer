@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using Unity.VisualScripting;
 using UnityEngine;
 
-public class CubeController : MonoBehaviour
+public class CubeController : NetworkMono
 {
     // Start is called before the first frame update
     [SerializeField] private float time;
@@ -14,33 +14,28 @@ public class CubeController : MonoBehaviour
     private Vector3 top;
     private Vector3 down;
 
-    private NetworkObjectPlayer _networkObjectPlayer;
 
     public float speed = 1f;
-    void Start()
+    public override void Start()
     {
-        _networkObjectPlayer = GetComponent<NetworkObjectPlayer>();
-        timerAdd = 0f;
+         base.Start();
+         timerAdd = 0f;
         isTop = false;
         currentTrarget = top;
         top = new Vector3(0, 1, 0);
         down = new Vector3(0, -1, 0);
     }
-
-    private void LateUpdate()
+    
+    public override void Update()
     {
-        
-    }
-
-    // Update is called once per frame
-    void Update()
-    {
-        if (_networkObjectPlayer.WPushed)
+       base.Update();
+       if (networkObjectPlayer.WPushed)
         {
             Debug.Log("updated speed");
-            _networkObjectPlayer.WPushed = false;
+            networkObjectPlayer.WPushed = false;
             speed *= 5;
         }
+        
         timerAdd += Time.deltaTime;
         if (timerAdd > time)
         {
@@ -52,4 +47,7 @@ public class CubeController : MonoBehaviour
         transform.position += currentTrarget * Time.deltaTime * GameServer.speed * speed;
 
     }
+
+
+    
 }

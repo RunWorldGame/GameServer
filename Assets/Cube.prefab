@@ -16,7 +16,7 @@ GameObject:
   - component: {fileID: 290170421766931610}
   m_Layer: 0
   m_Name: Cube
-  m_TagString: Untagged
+  m_TagString: PlayerPrefab
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -121,7 +121,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   time: 5
   speed: 1
-  WPushed: 0
 --- !u!114 &290170421766931610
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -134,3 +133,4 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b47ac380f39d0ab4b95b5b1f562a5090, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  WPushed: 0

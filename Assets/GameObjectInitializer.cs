@@ -12,12 +12,14 @@ public class GameObjectInitializer : MonoBehaviour
     
        private GameObject getObjectToNumber(int number)
         {
+                var t =  GameNetworkInitializer.Instance.ObjectsSpawnable[0];
+                Debug.Log(t.tag);
+                return t;
             if (number == 1)
             {
-                
-                return GetComponent<GameServer>().PlayerPrefab;
+
             }
             
-            return GetComponent<GameServer>().PlayerPrefab;
+            return GameNetworkInitializer.Instance.ObjectsSpawnable[0];
         }
 }

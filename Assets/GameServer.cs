@@ -8,19 +8,22 @@ using System.Threading.Tasks;
 using DefaultNamespace;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.Serialization;
 
 public class GameServer : MonoBehaviour
 {
-    [SerializeField] private List<GameObject> _objectsToSync;
+    public List<NetworkObject> ObjectsToSync
+    {
+        get => GameNetworkInitializer.Instance.ObjectsToSync;
+    }
     [SerializeField] private GameObject _playerPrefab;
     [SerializeField] private List<Vector3> _playerSpawnPoints;
-     private List<ObjectToSpawn> _objectToSpawns;
     private Queue<ObjectToSpawn> _bufferSpawnElements; 
     private Queue<ObjectToSpawn> _bufferPlayerToSpawns; 
 
     public static float speed = 1f;
-    private Dictionary<EndPoint, User> _dictionary;
-    private Dictionary<EndPoint, NetworkObjectPlayer> _playerGameObjectList;
+    private Dictionary<EndPoint, User> _playerUserObjDic;
+    private Dictionary<EndPoint, NetworkObjectPlayer> _playerNetworkObjectDic;
 
     private EndPoint _senderRemote; 
     
@@ -45,7 +48,6 @@ public class GameServer : MonoBehaviour
     private GameObjectInitializer _gameObjectInitializer;
     private void Awake()
     {
-        _objectsToSync = new List<GameObject>();
         _bufferPlayerToSpawns = new Queue<ObjectToSpawn>();
         _buttonClickToByte = new Dictionary<byte, KeyCode>();
         _buttonClickToByte.Add( 0x1, KeyCode.Mouse1); 
@@ -54,11 +56,11 @@ public class GameServer : MonoBehaviour
         _buttonClickToByte.Add( 0x4, KeyCode.A); 
         _buttonClickToByte.Add( 0x5, KeyCode.S); 
         _buttonClickToByte.Add( 0x6, KeyCode.D);
-        _objectToSpawns = new List<ObjectToSpawn>();
+        
         _bufferSpawnElements = new Queue<ObjectToSpawn>();
-        _playerGameObjectList = new Dictionary<EndPoint, NetworkObjectPlayer>();
+        _playerNetworkObjectDic = new Dictionary<EndPoint, NetworkObjectPlayer>();
         _senderRemote = new IPEndPoint(IPAddress.Any, 11111);
-        _dictionary = new Dictionary<EndPoint, User>();
+        _playerUserObjDic = new Dictionary<EndPoint, User>();
         _socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
         _socket2 = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
         _buffer = new byte[1024];
@@ -80,15 +82,15 @@ public class GameServer : MonoBehaviour
         {
             Debug.Log("should in 1");
             var gameObject = _gameObjectInitializer.instantiateGameObjectMainThread(_bufferSpawnElements.Dequeue());
-            _objectsToSync.Add(gameObject);
+            ObjectsToSync.Add(gameObject.GetComponent<NetworkObject>());
         } 
         while (_bufferPlayerToSpawns.Count > 0)
         { 
             Debug.Log("new player gets instantiated");
             var x = _bufferPlayerToSpawns.Dequeue();
             var gameObject = _gameObjectInitializer.instantiateGameObjectMainThread(x); 
-            _objectsToSync.Add(gameObject);
-            _playerGameObjectList.Add(x.Endpoint, gameObject.GetComponent<NetworkObjectPlayer>());
+            ObjectsToSync.Add(gameObject.GetComponent<NetworkObjectPlayer>());
+            _playerNetworkObjectDic.Add(x.Endpoint, gameObject.GetComponent<NetworkObjectPlayer>());
         }
 
         sendPositionCharacters();
@@ -108,10 +110,10 @@ public class GameServer : MonoBehaviour
     {
         Debug.Log("listening for connections");
         _ = _socket.ReceiveFrom(_buffer, ref _senderRemote);
-            if (_dictionary.ContainsKey(_senderRemote))
+            if (_playerUserObjDic.ContainsKey(_senderRemote))
             {
                 //Debug.Log("user already exists");
-                if (_dictionary.TryGetValue(_senderRemote, out User user))
+                if (_playerUserObjDic.TryGetValue(_senderRemote, out User user))
                 {
                     user.lastSeen = DateTime.Now;
                 }
@@ -172,7 +174,7 @@ public class GameServer : MonoBehaviour
 
     private void sendNewMessage(List<byte> listBytes)
     {
-        foreach (var (key, value) in _dictionary) 
+        foreach (var (key, value) in _playerUserObjDic) 
         {
             _socket2.SendTo(listBytes.ToArray(), key); 
         }
@@ -182,8 +184,10 @@ public class GameServer : MonoBehaviour
     {
         List<byte> message = new List<byte>();
         message.Add(0x6);
-        foreach (var  value in _objectsToSync)
+        foreach (var  value in ObjectsToSync)
+            
         {
+            
             addVector3BytesToListByte(message, value.transform.position);
             addVector3BytesToListByte(message, value.transform.rotation.eulerAngles);
             message.Add(0x1);
@@ -235,9 +239,9 @@ public class GameServer : MonoBehaviour
                 Debug.Log("key pressed "+ _buttonClickToByte[message[i]]);
             }
 
-            var t = _dictionary[endPoint];
+            var t = _playerUserObjDic[endPoint];
             Debug.Log("user " + t.Name + " send a message");
-            _playerGameObjectList[endPoint].WPushed = true;
+            _playerNetworkObjectDic[endPoint].WPushed = true;
 
         }
         else if (messageType == 0x5)
@@ -257,7 +261,7 @@ public class GameServer : MonoBehaviour
             ObjectToSpawn objectToSpawn = new ObjectToSpawn(spawnPoint, 1, new Quaternion(0,0,0,0), _senderRemote); 
             Debug.Log("should so far");
                 
-            _dictionary.Add(_senderRemote, new User(name)); 
+            _playerUserObjDic.Add(_senderRemote, new User(name)); 
             spawnNewPlayer(objectToSpawn, name);
             
         }
@@ -269,7 +273,7 @@ public class GameServer : MonoBehaviour
             byte isShooting;
             Debug.Log("message type new Position");
             int currentIndexList = 1;
-            foreach (var  value in _objectsToSync)
+            foreach (var  value in ObjectsToSync)
             {
                 pos = subtractVector3FromByteArray(message, currentIndexList);
                 currentIndexList += 12;
