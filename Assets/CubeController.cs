@@ -13,12 +13,16 @@ public class CubeController : NetworkMono
     private Vector3 currentTrarget;
     private Vector3 top;
     private Vector3 down;
-
-
+    
     public float speed = 1f;
     public override void Start()
     {
          base.Start();
+         if (!isServerObj)
+         {
+             return;
+         }
+       
          timerAdd = 0f;
         isTop = false;
         currentTrarget = top;
@@ -29,6 +33,10 @@ public class CubeController : NetworkMono
     public override void Update()
     {
        base.Update();
+       if (!isServerObj)
+       {
+           return;
+       }
        if (networkObjectPlayer.WPushed)
         {
             Debug.Log("updated speed");
@@ -44,7 +52,7 @@ public class CubeController : NetworkMono
             currentTrarget = isTop ? top : down;
         }
 
-        transform.position += currentTrarget * Time.deltaTime * GameServer.speed * speed;
+        transform.position += currentTrarget * Time.deltaTime * speed;
 
     }
 

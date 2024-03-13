@@ -11,7 +11,7 @@ public class NetworkObject : MonoBehaviour
     public Vector3 NetworkPosition { get; set; }
 
     public Vector3 EulerAngles { get; set; }
-    
-    
+
+    public byte TypeObject;
 
 }

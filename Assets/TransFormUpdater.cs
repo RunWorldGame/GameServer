@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -9,13 +10,9 @@ namespace DefaultNamespace.Scenes
 {
     public class TransFormUpdater
     {
-        public Transform objectToTrack;
         private Socket _clientSocket;
-
         
         private byte[] _buffer;
-
-        public Vector3 currentNetworkConnectionPosition;
         
         private EndPoint _senderRemote;
 
@@ -23,8 +20,6 @@ namespace DefaultNamespace.Scenes
 
         private GameClient _gameClient;
 
-        private int counter = 0;
-        
         public TransFormUpdater( GameClient gameClient)
         {
             _gameClient = gameClient;
@@ -32,97 +27,162 @@ namespace DefaultNamespace.Scenes
             _clientSocket = gameClient._clientSocket;
             _buffer = new byte[1024];
         }
-        
 
         public void StartListeningForNewPositions()
         {
-            //_listenEvent.Invoke();
-            Debug.Log("just listening");
             Listen();
         }
         
         public void Listen()
         {
-
-            Debug.Log("invoked");
-            while (true)
+            NetworkStream stream = _gameClient.TcpClient.GetStream();
+         
+            int bytesRead;
+            bool justOnes = true;
+         
+            try
             {
-                 _ = _clientSocket.ReceiveFrom(_buffer, ref _senderRemote);
-                 routeMessage();
+                // Loop to receive all the data sent by the client.
+                while ((bytesRead = stream.Read(_buffer, 0, _buffer.Length)) != 0)
+                {
+                    // Convert the data received into a string.
+                    //var strGet = Encoding.UTF8.GetString(buffer);
+                    //Debug.Log(strGet);
+                   
+                    
+                    List<byte> dataToSendBack = routeMessage(bytesRead);
+                    if (justOnes)
+                    {
+                        stream.Write(dataToSendBack.ToArray());
+                    }
+                    justOnes = false;
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.Log("Error: " + e.ToString());
+            }
+            finally
+            {
+                // Shutdown and close the connection.
+                _gameClient.TcpClient.Close();
             }
         }
-        private void routeMessage()
-             {
+        private List<byte> routeMessage(int lengthWholeMessage)
+        {
+            List<byte> messageToSend = new List<byte>();
+            
                  int currentIndex = 0;
-                 byte messageType = _buffer[0]; 
-                 if (messageType == 0x1) 
-                 { 
-                     Debug.Log("is new player request"); 
-                     var nameLength = _buffer[1]; 
-                     Debug.Log("name lenghtj " + ((int)nameLength)); 
-                     currentIndex = (int)nameLength + 2; 
-                     byte[] nameBytes = new byte[(int) nameLength]; 
-                     Array.Copy(_buffer, 2,nameBytes,0, nameLength);
-                     string name = Encoding.UTF8.GetString(nameBytes);
-                     Debug.Log("name is " + name );
-                     Vector3 spawnPos = Vector3.zero;
-                     byte[] floatA = new byte[4];
-                     Array.Copy(_buffer, currentIndex,floatA,0, 4);
-                     spawnPos.x = BitConverter.ToSingle(floatA);
-                     currentIndex += 4;
-                     Array.Copy(_buffer, currentIndex,floatA,0, 4);
-                     spawnPos.y = BitConverter.ToSingle(floatA);
-                     currentIndex += 4;
-                     Array.Copy(_buffer, currentIndex,floatA,0, 4);
-                     spawnPos.z = BitConverter.ToSingle(floatA);
-                     
-                     currentIndex += 4; 
-                        
-                     Debug.Log("vector 3 is " + spawnPos);
-                     
-                    ObjectToSpawn objectToSpawn = new ObjectToSpawn(spawnPos, 1, new Quaternion(0,0,0,0));
-                    _gameClient.BufferSpawnElements.Enqueue(objectToSpawn);
-                    
-                    
-                     
-                 }
-                 else if (messageType == 0x6)
+                 byte messageType = _buffer[currentIndex];
+                 
+                 Debug.Log("got message with type " + (byte) messageType);
+                 int lengthMessage = BitConverter.ToInt32(_buffer, 1);
+                 currentIndex += 4;
+                 Debug.Log(lengthWholeMessage);
+                 Debug.Log(lengthMessage);
+                 if (lengthWholeMessage > lengthMessage)
                  {
-                     
+                     Debug.Log("should be two messages");
+                 }
+                 
+        
+                 currentIndex++;
+                 if (messageType == 0x6)
+                 {
+                     Debug.Log("got message 0x6");
                      Vector3 pos = Vector3.zero;
                      Vector3 rot = Vector3.zero;
                      byte currentAnimation;
                      byte isShooting;
-                     int currentIndexList = 1;
-                     int m = 0;
-                     Debug.Log(counter);
-                     var d = _gameClient.ObjectsToSync;
-                     foreach (var networkObject in d)
+                     var c = _gameClient.ActivePlayer;
+                     foreach (var networkObject in c)
                      {
-                         
-                         pos = subtractVector3FromByteArray(_buffer, currentIndexList);
-                         currentIndexList += 12;
-                         rot = subtractVector3FromByteArray(_buffer, currentIndexList);
-                         currentIndexList += 12;
-                         currentAnimation = _buffer[currentIndexList++];
-                         isShooting = _buffer[currentIndexList++];
-                         
+                         pos = subtractVector3FromByteArray(_buffer, currentIndex);
+                         currentIndex += 12;
+                         rot = subtractVector3FromByteArray(_buffer, currentIndex);
+                         currentIndex += 12;
+                         currentAnimation = _buffer[currentIndex++];
+                         isShooting = _buffer[currentIndex++];
                          
                          networkObject.NetworkPosition = pos; 
                          networkObject.EulerAngles = rot; 
                          networkObject.CurrentAnimation = currentAnimation; 
                          networkObject.IsShooting = isShooting;
-                         Debug.Log("" + counter + " new pos " + pos);
                      }
-
-                     counter++;
+                     var d = _gameClient.ObjectsToSync;
+                     foreach (var networkObject in d)
+                     {
+                         pos = subtractVector3FromByteArray(_buffer, currentIndex);
+                         currentIndex += 12;
+                         rot = subtractVector3FromByteArray(_buffer, currentIndex);
+                         currentIndex += 12;
+                         currentAnimation = _buffer[currentIndex++];
+                         isShooting = _buffer[currentIndex++];
+                         
+                         networkObject.NetworkPosition = pos; 
+                         networkObject.EulerAngles = rot; 
+                         networkObject.CurrentAnimation = currentAnimation; 
+                         networkObject.IsShooting = isShooting;
+                     }
+                 }
+                 else if (messageType == 0x8)
+                 {
+                     Debug.Log("got messageype 0x8");
+                     var countObjects = BitConverter.ToSingle(_buffer, 1);
+                     currentIndex += 4;
+                     Vector3 pos = Vector3.zero;
+                     Vector3 rot = Vector3.zero;
+                     for (int i = _gameClient.ObjectsToSync.Count; i < countObjects; i++)
+                     {
+                         Debug.Log("added new object");
+                         pos = subtractVector3FromByteArray(_buffer, currentIndex);
+                         currentIndex += 12;
+                         rot = subtractVector3FromByteArray(_buffer, currentIndex);
+                         currentIndex += 12;
+                         byte typeObject = _buffer[currentIndex++];
+                         ObjectToSpawn objectToSpawn = new ObjectToSpawn(pos, typeObject, Quaternion.Euler(0, 0, 0));
+                         _gameClient.BufferSpawnElements.Enqueue(objectToSpawn);
+                     }
+                 }
+                 else if (messageType == 0x9)
+                 {
+                     Debug.Log("got message 0x9");
+                     Vector3 pos = Vector3.zero;
+                     Vector3 rot = Vector3.zero;
+                     int newCountActivePlayers = BitConverter.ToInt32(_buffer, currentIndex);
+                     currentIndex += 4;
+                     for (int i = _gameClient.ActivePlayer.Count ; i < newCountActivePlayers; i++)
+                     {
+                         pos = subtractVector3FromByteArray(_buffer, currentIndex);
+                         currentIndex += 12;
+                         rot = subtractVector3FromByteArray(_buffer, currentIndex);
+                         currentIndex += 12;
+                         byte typeObject = _buffer[currentIndex++];
+                         Debug.Log("player with tyoe " + typeObject);
+                         ObjectToSpawn objectToSpawn = new ObjectToSpawn(pos, typeObject, Quaternion.Euler(0, 0, 0));
+                         _gameClient.BufferSpawnPlayers.Enqueue(objectToSpawn);
+                     }
+                 }
+                 else if (messageType == 0x99)
+                 {
+                     messageToSend.Add(0x99);
+                     Debug.Log("got ping response");
                  }
                  else
                  {
-                        Debug.Log("soemtzhing wrong");
+                     messageToSend.Add(0x50);
+                     var t = Encoding.UTF8.GetBytes("Hallo welt");
+                     foreach (byte b in t)
+                     { 
+                         messageToSend.Add(b); 
+                     }
+                     Debug.Log("soemtzhing wrong");
                  }
-             }
-             
+                 
+                  GameNetworkInitializer.Instance.AddDelimeterFrame(messageToSend,1);
+                  return messageToSend;
+
+        }
         
               private Vector3 subtractVector3FromByteArray(byte[] arr, int index)
               { 
@@ -135,6 +195,5 @@ namespace DefaultNamespace.Scenes
                   
                   return vector3;
               }
-           
     }
 }

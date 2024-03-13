@@ -16,6 +16,7 @@ using Unity.VisualScripting;
 public class GameClient : MonoBehaviour
 {
     public Queue<ObjectToSpawn> BufferSpawnElements;
+    public Queue<ObjectToSpawn> BufferSpawnPlayers;
 
     
     public List<NetworkObject> ObjectsToSync
@@ -23,11 +24,15 @@ public class GameClient : MonoBehaviour
         get => GameNetworkInitializer.Instance.ObjectsToSync;
     }
 
+    public List<NetworkObject> ActivePlayer;
+
     public Socket _clientSocket;
     private IPEndPoint _serverEndpoint;
     private byte[] _buffer;
     private EndPoint _senderRemote;
     private Vector3 curPos;
+
+    private byte selectedCharacter = 0x2;
 
 
     private Dictionary<KeyCode, byte> _buttonClickToByte;
@@ -37,11 +42,18 @@ public class GameClient : MonoBehaviour
 
     private GameObjectInitializer _gameObjectInitializer;
 
+    private string name = "Thomas";
+
 
     private bool isPlayerInitiatingReq = true;
 
+    private bool readyToPlay = false;
+    [HideInInspector]
+    public TcpClient TcpClient;
     private void Awake()
     {
+        BufferSpawnPlayers = new Queue<ObjectToSpawn>();
+        ActivePlayer = new List<NetworkObject>();
         _buttonClickToByte = new Dictionary<KeyCode, byte>();
         _buttonClickToByte.Add(KeyCode.Mouse1, 0x1);
         _buttonClickToByte.Add(KeyCode.Mouse2, 0x2);
@@ -54,18 +66,16 @@ public class GameClient : MonoBehaviour
         _serverEndpoint = new IPEndPoint(IPAddress.Parse("127.0.0.1"), 11111);
         
         _buffer = new byte[1024];
-        
+        string serverIpAddress = "127.0.0.1";
+        int port = 5000; 
         _senderRemote = new IPEndPoint(IPAddress.Any, 0);
-        
-        
-        
-        var ping = getPing(_clientSocket, _serverEndpoint);
-        Debug.Log("made ping");
-       
+        TcpClient = new TcpClient(serverIpAddress, port);
+        Debug.Log("Connected to server.");
     }
 
     private void Start()
     {
+        
         _gameObjectInitializer = GetComponent<GameObjectInitializer>();
         Debug.Log("start called");
         Task.Run(() =>
@@ -75,51 +85,62 @@ public class GameClient : MonoBehaviour
             _transFormUpdater.StartListeningForNewPositions();
             Debug.Log("not null anymore");
         });
-        sendJoinRequest();
+        
+        sendJoinRequest(TcpClient.GetStream());
+        
     }
 
     private void Update()
     {
+        /*
         sendUserInput();
-       //Debug.Log("new position"); 
-       if (Input.GetKeyDown(KeyCode.Space))
-       {
-           //Debug.Log("space pressed");
-           //_clientSocket.SendTo(new byte[] { 0 }, _serverEndpoint);
-           //Debug.Log("send message");
-       }
+*/
        while (BufferSpawnElements.Count > 0)
        { 
-           Debug.Log("should in 1");
            var x = BufferSpawnElements.Dequeue();
-           Debug.Log(x);
            var gameObj = _gameObjectInitializer.instantiateGameObjectMainThread(x);
-           if (isPlayerInitiatingReq)
-           {
-               Debug.Log("setting cam,era");
-                isPlayerInitiatingReq = false;
-                CameraController.CameraControll.setObjectToFollow(gameObj.GetComponent<Transform>());
-           }
            ObjectsToSync.Add(gameObj.GetComponent<NetworkObject>());
-           Debug.Log("added a new gameobject");
         }
+
+       if (BufferSpawnPlayers.Count > 0)
+       {
+           GameObject gameObj = null;
+           while (BufferSpawnPlayers.Count > 0)
+           {
+                Debug.Log("instantiating new player");
+                var x = BufferSpawnPlayers.Dequeue();
+                gameObj = _gameObjectInitializer.instantiateGameObjectMainThread(x);
+                ActivePlayer.Add(gameObj.GetComponent<NetworkObjectPlayer>());
+           }
+
+          if (isPlayerInitiatingReq)
+          { 
+              Debug.Log("setting cam,era"); 
+              isPlayerInitiatingReq = false; 
+              CameraController.CameraControll.setObjectToFollow(gameObj.GetComponent<Transform>());
+           }
+       }
+
+      
     }
 
-    private void sendJoinRequest()
+    private void sendJoinRequest(NetworkStream networkStream)
     {
-        
         List<byte> message = new List<byte>();
-        message.Add(5);
-        string name = "Thomas"; 
+        message.Add(0x5);
         var bytesName = Encoding.UTF8.GetBytes(name);
         message.Add((byte) bytesName.Length);
         foreach (byte b in bytesName)
         {
             message.Add(b); 
         }
-        sendNewMessage(message);
+        message.Add(selectedCharacter);
+        networkStream.Write(message.ToArray());
     }
-
+      private void sendNewMessage(List<byte> listBytes)
+      {
+          _clientSocket.SendTo(listBytes.ToArray(), _serverEndpoint);
+      }
 
     private void sendUserInput()
     {
@@ -149,57 +170,21 @@ public class GameClient : MonoBehaviour
         sendNewMessage(message);
     }
     
-    private void sendNewMessage(List<byte> listBytes)
-    {
-        byte[] delimeter = new byte[] { 0x12, 0x98, 0x90, 0x23,0x24,0x25 };
-        foreach (byte b in delimeter)
-        {
-           listBytes.Add(b); 
-        }
-        //Debug.Log("sent message");
-        _clientSocket.SendTo(listBytes.ToArray(), _serverEndpoint);
-        
-        
-    }
-
-
-    private void FixedUpdate()
-    {
-    }
-
-    private void Listen()
-    {
-
-            //int received = _clientSocket.ReceiveFrom(_buffer, ref _senderRemote);
-            
-            //routeMessage();
-           /* 
-            //Debug.Log("got something");
-            string data = Encoding.ASCII.GetString(_buffer, 0, received);
-            //Debug.Log(data);
-            var arr = data.Split(";");
-            //Debug.Log(arr);
-            float x = float.Parse(arr[0]);
-            float y = float.Parse(arr[1]);
-            float z = float.Parse(arr[2]);
-            //Debug.Log("z");
-            curPos = new Vector3(x, y, z);
-            //Debug.Log("new postiion");
-            
-        */
-    }
-    
-     
-    
-    long getPing(Socket socket, EndPoint endPoint)
+    long getPing(TcpClient tcpClient)
     {
         var watch = Stopwatch.StartNew();
         var message = "hallo";
         byte[] data = Encoding.ASCII.GetBytes(message);
-    
-        socket.SendTo(data, endPoint);
-
-
+        List<byte> messageBytes = new List<byte>();
+        messageBytes.Add(0x99);
+        foreach (byte b in data)
+        {
+           messageBytes.Add(b); 
+        }
+        byte[] buffer = new byte[1024];
+        tcpClient.GetStream().Write(messageBytes.ToArray());
+        tcpClient.GetStream().Read(buffer);
+        Debug.Log("ending");
         return 0;
     }
     void OnDestroy()
