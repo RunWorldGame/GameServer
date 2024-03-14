@@ -137,7 +137,7 @@ public class GameServer : MonoBehaviour
                 Debug.Log("sending bytes ");
                 foreach (byte b in dataToSendBack)
                 {
-                   Debug.Log((int)b); 
+                   Debug.Log(b); 
                 }
                 stream.Write(dataToSendBack.ToArray());
             }
@@ -207,36 +207,34 @@ public class GameServer : MonoBehaviour
     }
 
 
-    private void sendPositionCharacters()
+    private void addPositionCharacters(List<byte> message)
     {
-        List<byte> message = new List<byte>();
         message.Add(0x6);
-            
         foreach (var  value in _playerNetworkObjectDic)
         {
-            addVector3BytesToListByte(message, value.Value.transform.position);
-            addVector3BytesToListByte(message, value.Value.transform.rotation.eulerAngles);
+            addVector3BytesToListByte(message, value.Value.NetworkPosition);
+            addVector3BytesToListByte(message, value.Value.EulerAngles);
             message.Add(0x1);
             message.Add(0x1);
         }
         foreach (var  value in ObjectsToSync)
         {
-            addVector3BytesToListByte(message, value.transform.position);
-            addVector3BytesToListByte(message, value.transform.rotation.eulerAngles);
+            addVector3BytesToListByte(message, value.NetworkPosition);
+            addVector3BytesToListByte(message, value.EulerAngles);
             message.Add(0x1);
             message.Add(0x1);
         }
-        //sendNewMessage(message);
     }
 
     private int AddAnotherMessageComingFrameAndLength(List<byte> message)
     {
         foreach (byte b in GameNetworkInitializer.Instance.anotherMessageComintFrame)
         {
+            Debug.Log("adding " + b + " to message");
            message.Add(b); 
         }
 
-        int t = message.Count + 1 + 4;
+        int t = message.Count  + 4;
         message.InsertRange(1,BitConverter.GetBytes(message.Count + 4) );
         return t;
     }
@@ -254,12 +252,12 @@ public class GameServer : MonoBehaviour
             
         }
         int currentIndex = 0;
-        byte messageType = message[currentIndex];
-        currentIndex++;
+        byte messageType = message[currentIndex++];
         if(messageType == 0x3)
         {
             Debug.Log("got new direction method");
-            for (int i = 2; i < message[1] + 2; i++)
+            
+            for (int i = 2; i < message[2] + 2; i++)
             {
                 Debug.Log("key pressed "+ _buttonClickToByte[message[i]]);
             }
@@ -267,12 +265,13 @@ public class GameServer : MonoBehaviour
             var t = _playerUserObjDic[tcpClient];
             Debug.Log("user " + t.Name + " send a message");
             _playerNetworkObjectDic[tcpClient].WPushed = true;
+            
+            addPositionCharacters(messageToSend);
 
         }
         else if (messageType == 0x5)
         {
-             var nameLength = message[currentIndex];
-             currentIndex++;
+             var nameLength = message[currentIndex++];
              Debug.Log("name lenghtj " + ((int)nameLength));
              byte[] nameBytes = new byte[(int) nameLength]; 
              Array.Copy(message, 2,nameBytes,0, nameLength);
@@ -298,13 +297,21 @@ public class GameServer : MonoBehaviour
         }
         else if(messageType == 0x50)
         {
+            messageToSend.Add(0x99);
             Debug.Log("send a messgae that client did not understand");
             
         }
+        else if (messageType == 0x6)
+        {
+            addPositionCharacters(messageToSend);
+            Debug.Log("position requested");   
+        }
         else
         {
-            
+            messageToSend.Add(0x99);
+            Debug.Log("didnt get response code");
         }
+
         GameNetworkInitializer.Instance.AddDelimeterFrame(messageToSend, offset);
         return messageToSend;
     }

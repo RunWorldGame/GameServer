@@ -23,6 +23,11 @@ public class GameClient : MonoBehaviour
     {
         get => GameNetworkInitializer.Instance.ObjectsToSync;
     }
+    
+    public bool ButtonsToSync
+    {
+        get =>  messagePressedButtons.Count != 0;
+    }
 
     public List<NetworkObject> ActivePlayer;
 
@@ -34,17 +39,16 @@ public class GameClient : MonoBehaviour
 
     private byte selectedCharacter = 0x2;
 
-
-    private Dictionary<KeyCode, byte> _buttonClickToByte;
-
     [CanBeNull] public TransFormUpdater _transFormUpdater = null;
 
 
     private GameObjectInitializer _gameObjectInitializer;
 
     private string name = "Thomas";
+[HideInInspector]
+    public bool anyButtonPressed = false;
 
-
+    [HideInInspector] public List<byte> messagePressedButtons = null;
     private bool isPlayerInitiatingReq = true;
 
     private bool readyToPlay = false;
@@ -52,15 +56,9 @@ public class GameClient : MonoBehaviour
     public TcpClient TcpClient;
     private void Awake()
     {
+        messagePressedButtons = new List<byte>();
         BufferSpawnPlayers = new Queue<ObjectToSpawn>();
         ActivePlayer = new List<NetworkObject>();
-        _buttonClickToByte = new Dictionary<KeyCode, byte>();
-        _buttonClickToByte.Add(KeyCode.Mouse1, 0x1);
-        _buttonClickToByte.Add(KeyCode.Mouse2, 0x2);
-        _buttonClickToByte.Add(KeyCode.W, 0x3);
-        _buttonClickToByte.Add(KeyCode.A, 0x4);
-        _buttonClickToByte.Add(KeyCode.S, 0x5);
-        _buttonClickToByte.Add(KeyCode.D, 0x6);
         BufferSpawnElements = new Queue<ObjectToSpawn>();
         _clientSocket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
         _serverEndpoint = new IPEndPoint(IPAddress.Parse("127.0.0.1"), 11111);
@@ -91,10 +89,9 @@ public class GameClient : MonoBehaviour
     }
 
     private void Update()
-    {
-        /*
-        sendUserInput();
-*/
+    { 
+        addUserInput(messagePressedButtons);
+        Debug.Log(anyButtonPressed);
        while (BufferSpawnElements.Count > 0)
        { 
            var x = BufferSpawnElements.Dequeue();
@@ -142,33 +139,18 @@ public class GameClient : MonoBehaviour
           _clientSocket.SendTo(listBytes.ToArray(), _serverEndpoint);
       }
 
-    private void sendUserInput()
-    {
-        List<byte> message = new List<byte>();
-        List<byte> tempMessage = new List<byte>();
-        message.Add(0x3);
-        bool sthClicked = false;
-        foreach (KeyCode keyCode in System.Enum.GetValues(typeof(KeyCode)))
-        {
-            // Check if the key is pressed down
-            if (Input.GetKeyDown(keyCode) && _buttonClickToByte.ContainsKey(keyCode))
-            {
-                sthClicked = true;
-                tempMessage.Add(_buttonClickToByte[keyCode]);
-                // Log the pressed key
-                Debug.Log("Key pressed: " + keyCode);
-            }
-        }
-        
-        if (!sthClicked) return;
-        message.Add((byte)tempMessage.Count);
-        foreach (byte t in tempMessage)
-        {
-            message.Add(t);
-        }
-        Debug.Log("send message");
-        sendNewMessage(message);
-    }
+      private void addUserInput(List<byte> message)
+      {
+          List<byte> tempMessage = new List<byte>();
+          foreach (var t in GameNetworkInitializer.Instance.ButtonClickToByte)
+          {
+              // Check if the key is pressed down
+              if (Input.GetKeyDown(t.Key))
+              {
+                  message.Add(t.Value);
+              }
+          }
+      }
     
     long getPing(TcpClient tcpClient)
     {

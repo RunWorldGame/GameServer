@@ -53,7 +53,8 @@ public class CubeController : NetworkMono
         }
 
         transform.position += currentTrarget * Time.deltaTime * speed;
-
+        networkObjectPlayer.NetworkPosition = transform.position;
+        networkObjectPlayer.EulerAngles = transform.rotation.eulerAngles;
     }
 
 

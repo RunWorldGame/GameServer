@@ -254,6 +254,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   ActivePlayer: []
+  anyButtonPressed: 0
+  messagePressedButtons: 
 --- !u!4 &340117018
 Transform:
   m_ObjectHideFlags: 0
@@ -341,7 +343,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 75d75090f30ae7d4ca0e9fa024730f54, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  IsServer: 0
+  IsServer: 1
   serverInstance: {fileID: 2129954506}
   clientInstance: {fileID: 340117016}
   ObjectsToSync:
@@ -350,6 +352,8 @@ MonoBehaviour:
   ObjectsSpawnable:
   - {fileID: 7962656077243229969, guid: c920a1dd06444fc4e811c7b6983fc0d0, type: 3}
   - {fileID: 4511359350739944734, guid: bcd0a738d48ca3f45a8c8ca6dce4f6d4, type: 3}
+  DelimeterFrame: 
+  anotherMessageComintFrame: 
 --- !u!4 &640835310
 Transform:
   m_ObjectHideFlags: 0
